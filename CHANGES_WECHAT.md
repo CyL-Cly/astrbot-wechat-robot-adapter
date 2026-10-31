@@ -1,3 +1,7 @@
+## 0.1.2-wechat.6
+- Fix: robot-client `ToErrorResponse` returns HTTP 200 with JSON `code:500`; client now raises on business code != 200 for JSON + multipart (image/voice).
+- Log successful voice upload (to_wxid + filename).
+
 # wechat_robot adapter changes
 
 ## 0.1.2-wechat.5 (2026-10-31)

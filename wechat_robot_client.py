@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import json
 import mimetypes
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,17 @@ from typing import Any
 import aiohttp
 
 from astrbot.api import logger
+
+
+def _raise_if_business_error(where: str, payload: Any, raw_text: str = "") -> None:
+    """robot-client ToErrorResponse 仍回 HTTP 200，只在 JSON 里写 code!=200。"""
+    if not isinstance(payload, dict) or "code" not in payload:
+        return
+    code = payload.get("code")
+    if code in (0, 200, "0", "200"):
+        return
+    msg = payload.get("message") or payload.get("msg") or raw_text[:500] or str(payload)
+    raise RuntimeError(f"{where} business code={code}: {msg}")
 
 
 class WechatRobotHTTPClient:
@@ -85,9 +97,11 @@ class WechatRobotHTTPClient:
                     f"wechat-robot API {method} {path} -> HTTP {resp.status}: {text[:500]}"
                 )
             try:
-                return await resp.json(content_type=None)
+                data = json.loads(text) if text else None
             except Exception:
                 return text
+            _raise_if_business_error(f"wechat-robot API {method} {path}", data, text)
+            return data
 
     async def is_logged_in(self) -> bool:
         try:
@@ -150,7 +164,11 @@ class WechatRobotHTTPClient:
                 raise RuntimeError(
                     f"上传图片失败 HTTP {resp.status}: {text[:500]}"
                 )
-
+            try:
+                data = json.loads(text) if text else None
+            except Exception:
+                data = None
+            _raise_if_business_error("上传图片", data, text)
 
     async def send_voice_local(self, to_wxid: str, file_path: str) -> None:
         await self._request_json(
@@ -182,6 +200,12 @@ class WechatRobotHTTPClient:
                 raise RuntimeError(
                     f"上传语音失败 HTTP {resp.status}: {text[:500]}"
                 )
+            try:
+                data = json.loads(text) if text else None
+            except Exception:
+                data = None
+            _raise_if_business_error(f"上传语音 path={path.name}", data, text)
+            logger.info("wechat_robot 语音已上传: to=%s file=%s", to_wxid, path.name)
 
     async def send_file_local(self, to_wxid: str, file_path: str) -> None:
         await self._request_json(

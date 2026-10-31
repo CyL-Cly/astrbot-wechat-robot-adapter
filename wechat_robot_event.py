@@ -136,6 +136,7 @@ class WechatRobotEvent(AstrMessageEvent):
                 logger.warning(f"multipart 上传语音失败，尝试 local: {e}")
         try:
             await self.client.send_voice_local(to_wxid, path)
+            logger.info("wechat_robot 语音已 local 发送: to=%s path=%s", to_wxid, path)
         except Exception as e:
             logger.error(f"发送语音失败: {e}")
 
