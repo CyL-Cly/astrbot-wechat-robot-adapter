@@ -1,5 +1,10 @@
 # wechat_robot adapter changes
 
+## 0.1.2-wechat.5 (2026-10-31)
+- Voice: `WechatRobotHTTPClient.send_voice_local` / `send_voice_upload` call real `/send/voice(/local)` APIs.
+- `send_by_session`: Record uses voice API (not file); File still file.
+- `WechatRobotEvent.send`: handles Record via shared `resolve_record_local_path` + voice API (prefer multipart upload like image).
+
 ## 0.1.2-wechat.4 (2026-10-30)
 - H1: `send_by_session` sends Image/Record/File (align Event.send); empty chain raises (no false delivered).
 - H4: replace `assert _client` with guard; `is_closed` / `mark_terminated` reflect terminate.

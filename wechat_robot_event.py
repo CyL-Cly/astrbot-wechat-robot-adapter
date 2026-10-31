@@ -2,17 +2,38 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, MessageChain
-from astrbot.api.message_components import At, File, Image, Plain
+from astrbot.api.message_components import At, File, Image, Plain, Record
 from astrbot.api.platform import AstrBotMessage, MessageType, PlatformMetadata
 
 from .wechat_official import is_official_or_system_wxid
 
 if TYPE_CHECKING:
     from .wechat_robot_client import WechatRobotHTTPClient
+
+
+async def resolve_record_local_path(record: Record) -> str:
+    """Resolve a Record component to a local filesystem path robot-client can use."""
+    file_field = getattr(record, "file", None) or ""
+    if isinstance(file_field, str) and file_field and not file_field.startswith(
+        ("http://", "https://", "base64://")
+    ):
+        return file_field
+    getter = getattr(record, "convert_to_file_path", None) or getattr(record, "get_file", None)
+    if callable(getter):
+        try:
+            path = await getter() if asyncio.iscoroutinefunction(getter) else getter()
+            if asyncio.iscoroutine(path):
+                path = await path
+            if path and not str(path).startswith(("http://", "https://")):
+                return str(path)
+        except Exception as e:
+            logger.warning(f"解析 Record 路径失败: {e}")
+    return ""
 
 
 class WechatRobotEvent(AstrMessageEvent):
@@ -58,6 +79,8 @@ class WechatRobotEvent(AstrMessageEvent):
                     plain_parts.append(comp.text)
             elif isinstance(comp, Image):
                 await self._send_image(to_wxid, comp)
+            elif isinstance(comp, Record):
+                await self._send_record(to_wxid, comp)
             elif isinstance(comp, File):
                 await self._send_file(to_wxid, comp)
             else:
@@ -99,6 +122,22 @@ class WechatRobotEvent(AstrMessageEvent):
             await self.client.send_image_local(to_wxid, path)
         except Exception as e:
             logger.error(f"发送图片失败: {e}")
+
+    async def _send_record(self, to_wxid: str, record: Record) -> None:
+        path = await resolve_record_local_path(record)
+        if not path:
+            logger.warning("语音组件无可发送本地路径")
+            return
+        if self.prefer_upload_image:
+            try:
+                await self.client.send_voice_upload(to_wxid, path)
+                return
+            except Exception as e:
+                logger.warning(f"multipart 上传语音失败，尝试 local: {e}")
+        try:
+            await self.client.send_voice_local(to_wxid, path)
+        except Exception as e:
+            logger.error(f"发送语音失败: {e}")
 
     async def _send_file(self, to_wxid: str, file_comp: File) -> None:
         path = None

@@ -3,6 +3,6 @@ display_name: wechat-robot 适配器
 desc: 将 hp0912/wechat-robot-client（iPad 微信机器人）接入 AstrBot。webhook 收消息、HTTP 回发；公众号(gh_*)不进私聊，仅 wechat_official_* 工具可查。
 short_desc: wechat-robot-client 平台适配器
 author: Grok Bot
-version: 0.1.2-wechat.4
+version: 0.1.2-wechat.5
 repo: https://github.com/CyL-Cly/astrbot-wechat-robot-adapter
 astrbot_version: ">=4.0.0"

@@ -32,7 +32,7 @@ from astrbot.core.platform.astr_message_event import MessageSesion
 from astrbot.core.platform.webhook_server import FastAPIWebhookServer
 
 from .wechat_robot_client import WechatRobotHTTPClient
-from .wechat_robot_event import WechatRobotEvent
+from .wechat_robot_event import WechatRobotEvent, resolve_record_local_path
 
 MSG_TEXT = 1
 MSG_IMAGE = 3
@@ -133,9 +133,9 @@ class WechatRobotAdapter(Platform):
                 await self._send_image_comp(to_wxid, comp, prefer_upload=prefer_upload)
                 sent_media = True
             elif isinstance(comp, Record):
-                path = await self._record_local_path(comp)
+                path = await resolve_record_local_path(comp)
                 if path:
-                    await self._client.send_file_local(to_wxid, path)
+                    await self._send_record_comp(to_wxid, path, prefer_upload=prefer_upload)
                     sent_media = True
                 else:
                     logger.warning("wechat_robot send_by_session: Record 无本地路径，已跳过")
@@ -194,20 +194,22 @@ class WechatRobotAdapter(Platform):
 
     @staticmethod
     async def _record_local_path(record: Record) -> str:
-        file_field = getattr(record, "file", None) or ""
-        if isinstance(file_field, str) and file_field and not file_field.startswith(("http://", "https://", "base64://")):
-            return file_field
-        getter = getattr(record, "convert_to_file_path", None) or getattr(record, "get_file", None)
-        if callable(getter):
+        return await resolve_record_local_path(record)
+
+    async def _send_record_comp(
+        self,
+        to_wxid: str,
+        path: str,
+        *,
+        prefer_upload: bool,
+    ) -> None:
+        if prefer_upload:
             try:
-                path = await getter() if asyncio.iscoroutinefunction(getter) else getter()
-                if asyncio.iscoroutine(path):
-                    path = await path
-                if path and not str(path).startswith(("http://", "https://")):
-                    return str(path)
+                await self._client.send_voice_upload(to_wxid, path)
+                return
             except Exception as e:
-                logger.warning(f"解析 Record 路径失败: {e}")
-        return ""
+                logger.warning(f"multipart 上传语音失败，尝试 local: {e}")
+        await self._client.send_voice_local(to_wxid, path)
 
     @staticmethod
     async def _file_local_path(file_comp: File) -> str:

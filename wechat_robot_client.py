@@ -6,6 +6,8 @@
 - POST /api/v1/robot/message/send/image/local {"to_wxid","file_path"}
 - POST /api/v1/robot/message/send/image       multipart: to_wxid + image
 - POST /api/v1/robot/message/send/file/local  {"to_wxid","file_path"}
+- POST /api/v1/robot/message/send/voice/local {"to_wxid","file_path"}
+- POST /api/v1/robot/message/send/voice       multipart: to_wxid + voice (.amr/.mp3/.wav)
 - GET  /api/v1/robot/is-loggedin
 """
 
@@ -147,6 +149,38 @@ class WechatRobotHTTPClient:
             if resp.status >= 400:
                 raise RuntimeError(
                     f"上传图片失败 HTTP {resp.status}: {text[:500]}"
+                )
+
+
+    async def send_voice_local(self, to_wxid: str, file_path: str) -> None:
+        await self._request_json(
+            "POST",
+            "/api/v1/robot/message/send/voice/local",
+            json={"to_wxid": to_wxid, "file_path": file_path},
+        )
+
+    async def send_voice_upload(self, to_wxid: str, file_path: str) -> None:
+        """multipart 上传语音（AstrBot 与 robot-client 不在同一文件系统时用）。
+
+        robot-client 仅接受 .amr / .mp3 / .wav。
+        """
+        session = await self._get_session()
+        url = f"{self.base_url}/api/v1/robot/message/send/voice"
+        path = Path(file_path)
+        mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        form = aiohttp.FormData()
+        form.add_field("to_wxid", to_wxid)
+        form.add_field(
+            "voice",
+            path.read_bytes(),
+            filename=path.name,
+            content_type=mime,
+        )
+        async with session.post(url, data=form) as resp:
+            text = await resp.text()
+            if resp.status >= 400:
+                raise RuntimeError(
+                    f"上传语音失败 HTTP {resp.status}: {text[:500]}"
                 )
 
     async def send_file_local(self, to_wxid: str, file_path: str) -> None:
